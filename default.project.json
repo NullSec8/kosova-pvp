@@ -1,0 +1,55 @@
+{
+  "name": "Kosova PvP",
+  "tree": {
+    "$className": "DataModel",
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "GameSetup": {
+        "$path": "src/ServerScriptService/GameSetup.server.lua"
+      },
+      "WeaponSystem": {
+        "$path": "src/ServerScriptService/WeaponSystem.server.lua"
+      },
+      "HealthSystem": {
+        "$path": "src/ServerScriptService/HealthSystem.server.lua"
+      },
+      "MapBuilder": {
+        "$path": "src/ServerScriptService/MapBuilder.server.lua"
+      },
+      "WeaponPickups": {
+        "$path": "src/ServerScriptService/WeaponPickups.server.lua"
+      },
+      "SoundSystem": {
+        "$path": "src/ServerScriptService/SoundSystem.server.lua"
+      }
+    },
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "Packages": {
+        "$path": "Packages"
+      }
+    },
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "$properties": {
+        "CameraMaxZoomDistance": 0.5,
+        "CameraMinZoomDistance": 0.5
+      },
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "CombatClient": {
+          "$path": "src/StarterPlayer/StarterPlayerScripts/CombatClient.client.lua"
+        },
+        "SoundClient": {
+          "$path": "src/StarterPlayer/StarterPlayerScripts/SoundClient.client.lua"
+        },
+        "UI": {
+          "$path": "src/StarterPlayer/StarterPlayerScripts/UI.client.lua"
+        },
+        "UILib": {
+          "$path": "src/StarterPlayer/StarterPlayerScripts/UILib"
+        }
+      }
+    }
+  }
+}

@@ -3,21 +3,17 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local StarterGui = game:GetService("StarterGui")
 
 local player = Players.LocalPlayer
 
--- Wait for player to load
 player.CharacterAdded:Wait()
-wait(1)
+task.wait(1)
 
--- Create HUD
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "KosovaPvP_HUD"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = player.PlayerGui
 
--- Health Bar Frame
 local healthFrame = Instance.new("Frame")
 healthFrame.Name = "HealthFrame"
 healthFrame.Size = UDim2.new(0, 300, 0, 40)
@@ -30,7 +26,6 @@ local healthCorner = Instance.new("UICorner")
 healthCorner.CornerRadius = UDim.new(0, 8)
 healthCorner.Parent = healthFrame
 
--- Health Bar Fill
 local healthFill = Instance.new("Frame")
 healthFill.Name = "HealthFill"
 healthFill.Size = UDim2.new(1, 0, 1, 0)
@@ -42,7 +37,6 @@ local healthFillCorner = Instance.new("UICorner")
 healthFillCorner.CornerRadius = UDim.new(0, 8)
 healthFillCorner.Parent = healthFill
 
--- Health Text
 local healthText = Instance.new("TextLabel")
 healthText.Name = "HealthText"
 healthText.Size = UDim2.new(1, 0, 1, 0)
@@ -53,7 +47,6 @@ healthText.Font = Enum.Font.GothamBold
 healthText.Text = "100 / 100"
 healthText.Parent = healthFrame
 
--- Team Display
 local teamFrame = Instance.new("Frame")
 teamFrame.Name = "TeamFrame"
 teamFrame.Size = UDim2.new(0, 200, 0, 50)
@@ -76,7 +69,6 @@ teamText.Font = Enum.Font.GothamBold
 teamText.Text = "KOSOVA"
 teamText.Parent = teamFrame
 
--- Score Display
 local scoreFrame = Instance.new("Frame")
 scoreFrame.Name = "ScoreFrame"
 scoreFrame.Size = UDim2.new(0, 300, 0, 60)
@@ -89,7 +81,6 @@ local scoreCorner = Instance.new("UICorner")
 scoreCorner.CornerRadius = UDim.new(0, 8)
 scoreCorner.Parent = scoreFrame
 
--- Kosovo Score
 local kosovaScore = Instance.new("TextLabel")
 kosovaScore.Name = "KosovaScore"
 kosovaScore.Size = UDim2.new(0.45, 0, 1, 0)
@@ -101,7 +92,6 @@ kosovaScore.Font = Enum.Font.GothamBold
 kosovaScore.Text = "KOSOVA: 0"
 kosovaScore.Parent = scoreFrame
 
--- VS Text
 local vsText = Instance.new("TextLabel")
 vsText.Name = "VsText"
 vsText.Size = UDim2.new(0.1, 0, 1, 0)
@@ -113,7 +103,6 @@ vsText.Font = Enum.Font.GothamBold
 vsText.Text = "VS"
 vsText.Parent = scoreFrame
 
--- Rival Score
 local rivalScore = Instance.new("TextLabel")
 rivalScore.Name = "RivalScore"
 rivalScore.Size = UDim2.new(0.45, 0, 1, 0)
@@ -125,30 +114,88 @@ rivalScore.Font = Enum.Font.GothamBold
 rivalScore.Text = "RIVAL: 0"
 rivalScore.Parent = scoreFrame
 
--- Update HUD loop
-spawn(function()
+local timerFrame = Instance.new("Frame")
+timerFrame.Name = "TimerFrame"
+timerFrame.Size = UDim2.new(0, 120, 0, 40)
+timerFrame.Position = UDim2.new(0.5, -60, 0, 85)
+timerFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+timerFrame.BorderSizePixel = 0
+timerFrame.Parent = screenGui
+
+local timerCorner = Instance.new("UICorner")
+timerCorner.CornerRadius = UDim.new(0, 8)
+timerCorner.Parent = timerFrame
+
+local timerText = Instance.new("TextLabel")
+timerText.Name = "TimerText"
+timerText.Size = UDim2.new(1, 0, 1, 0)
+timerText.BackgroundTransparency = 1
+timerText.TextColor3 = Color3.fromRGB(255, 255, 0)
+timerText.TextScaled = true
+timerText.Font = Enum.Font.GothamBold
+timerText.Text = "3:00"
+timerText.Parent = timerFrame
+
+local announceFrame = Instance.new("Frame")
+announceFrame.Name = "AnnounceFrame"
+announceFrame.Size = UDim2.new(0, 500, 0, 80)
+announceFrame.Position = UDim2.new(0.5, -250, 0.3, 0)
+announceFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+announceFrame.BackgroundTransparency = 0.3
+announceFrame.BorderSizePixel = 0
+announceFrame.Visible = false
+announceFrame.Parent = screenGui
+
+local announceCorner = Instance.new("UICorner")
+announceCorner.CornerRadius = UDim.new(0, 12)
+announceCorner.Parent = announceFrame
+
+local announceText = Instance.new("TextLabel")
+announceText.Name = "AnnounceText"
+announceText.Size = UDim2.new(1, 0, 1, 0)
+announceText.BackgroundTransparency = 1
+announceText.TextColor3 = Color3.fromRGB(255, 255, 255)
+announceText.TextScaled = true
+announceText.Font = Enum.Font.GothamBold
+announceText.Text = ""
+announceText.Parent = announceFrame
+
+local function getTeamKills(teamName)
+    local total = 0
+    for _, p in pairs(Players:GetPlayers()) do
+        if p.Team and p.Team.Name == teamName and p:FindFirstChild("leaderstats") then
+            total = total + p.leaderstats.Kills.Value
+        end
+    end
+    return total
+end
+
+local function formatTime(seconds)
+    local mins = math.floor(seconds / 60)
+    local secs = seconds % 60
+    return mins .. ":" .. string.format("%02d", secs)
+end
+
+local gameEvent = ReplicatedStorage:WaitForChild("GameEvent", 10)
+
+task.spawn(function()
     while true do
-        wait(0.1)
+        task.wait(0.1)
 
         if player.Character and player.Character:FindFirstChild("Humanoid") then
-            local humanoid = player.Character.Humanoid
-            local healthPercent = humanoid.Health / humanoid.MaxHealth
-
-            -- Update health bar
-            healthFill.Size = UDim2.new(healthPercent, 0, 1, 0)
-            healthText.Text = math.floor(humanoid.Health) .. " / " .. humanoid.MaxHealth
-
-            -- Color based on health
-            if healthPercent > 0.6 then
+            local hum = player.Character.Humanoid
+            local hp = hum.Health / hum.MaxHealth
+            healthFill.Size = UDim2.new(hp, 0, 1, 0)
+            healthText.Text = math.floor(hum.Health) .. " / " .. hum.MaxHealth
+            if hp > 0.6 then
                 healthFill.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
-            elseif healthPercent > 0.3 then
+            elseif hp > 0.3 then
                 healthFill.BackgroundColor3 = Color3.fromRGB(255, 200, 50)
             else
                 healthFill.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
             end
         end
 
-        -- Update team
         if player.Team then
             teamText.Text = player.Team.Name:upper()
             if player.Team.Name == "Kosova" then
@@ -157,7 +204,44 @@ spawn(function()
                 teamFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 150)
             end
         end
+
+        kosovaScore.Text = "KOSOVA: " .. getTeamKills("Kosova")
+        rivalScore.Text = "RIVAL: " .. getTeamKills("Rival")
     end
 end)
+
+if gameEvent then
+    gameEvent.OnClientEvent:Connect(function(action, data)
+        if action == "Timer" then
+            timerText.Text = formatTime(data)
+        elseif action == "RoundStart" then
+            announceFrame.Visible = true
+            announceText.Text = "ROUND STARTED!"
+            announceText.TextColor3 = Color3.fromRGB(0, 255, 0)
+            task.wait(3)
+            announceFrame.Visible = false
+        elseif action == "RoundEnd" then
+            announceFrame.Visible = true
+            announceText.Text = data .. " WINS!"
+            if data == "Kosova" then
+                announceText.TextColor3 = Color3.fromRGB(255, 80, 80)
+            else
+                announceText.TextColor3 = Color3.fromRGB(80, 80, 255)
+            end
+            task.wait(5)
+            announceFrame.Visible = false
+        elseif action == "Intermission" then
+            announceFrame.Visible = true
+            announceText.Text = "INTERMISSION - " .. formatTime(data)
+            announceText.TextColor3 = Color3.fromRGB(255, 255, 0)
+        elseif action == "Killed" then
+            announceFrame.Visible = true
+            announceText.Text = "YOU WERE KILLED BY " .. data
+            announceText.TextColor3 = Color3.fromRGB(255, 0, 0)
+            task.wait(3)
+            announceFrame.Visible = false
+        end
+    end)
+end
 
 print("Kosova PvP - HUD Loaded!")

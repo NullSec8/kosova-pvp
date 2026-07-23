@@ -3,8 +3,8 @@
 
 local Teams = game:GetService("Teams")
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
--- Create Teams
 local teamKosova = Instance.new("Team")
 teamKosova.Name = "Kosova"
 teamKosova.TeamColor = BrickColor.new("Bright red")
@@ -17,7 +17,10 @@ teamRival.TeamColor = BrickColor.new("Bright blue")
 teamRival.AutoAssignable = true
 teamRival.Parent = Teams
 
--- Create Spawn Points
+local gameEvent = Instance.new("RemoteEvent")
+gameEvent.Name = "GameEvent"
+gameEvent.Parent = ReplicatedStorage
+
 local function createSpawn(name, position, team)
     local spawn = Instance.new("SpawnLocation")
     spawn.Name = name
@@ -27,23 +30,28 @@ local function createSpawn(name, position, team)
     spawn.CanCollide = true
     spawn.TeamColor = team.TeamColor
     spawn.Neutral = false
+    spawn.Material = Enum.Material.Neon
+    spawn.Transparency = 0.5
     spawn.Parent = workspace
+
+    local light = Instance.new("PointLight")
+    light.Brightness = 1
+    light.Range = 15
+    light.Color = team.TeamColor == BrickColor.new("Bright red") and Color3.fromRGB(255, 50, 50) or Color3.fromRGB(50, 100, 255)
+    light.Parent = spawn
+
     return spawn
 end
 
--- Kosovo spawns (red side)
-createSpawn("KosovaSpawn1", Vector3.new(-50, 5, -50), teamKosova)
-createSpawn("KosovaSpawn2", Vector3.new(-50, 5, 50), teamKosova)
-createSpawn("KosovaSpawn3", Vector3.new(-30, 5, 0), teamKosova)
+createSpawn("KosovaSpawn1", Vector3.new(-30, 3, -30), teamKosova)
+createSpawn("KosovaSpawn2", Vector3.new(-30, 3, 30), teamKosova)
+createSpawn("KosovaSpawn3", Vector3.new(-15, 3, 0), teamKosova)
 
--- Rival spawns (blue side)
-createSpawn("RivalSpawn1", Vector3.new(50, 5, -50), teamRival)
-createSpawn("RivalSpawn2", Vector3.new(50, 5, 50), teamRival)
-createSpawn("RivalSpawn3", Vector3.new(30, 5, 0), teamRival)
+createSpawn("RivalSpawn1", Vector3.new(30, 3, -30), teamRival)
+createSpawn("RivalSpawn2", Vector3.new(30, 3, 30), teamRival)
+createSpawn("RivalSpawn3", Vector3.new(15, 3, 0), teamRival)
 
--- Player Stats Setup
 local function onPlayerAdded(player)
-    -- Create leaderstats
     local leaderstats = Instance.new("Folder")
     leaderstats.Name = "leaderstats"
     leaderstats.Parent = player
@@ -58,12 +66,6 @@ local function onPlayerAdded(player)
     deaths.Value = 0
     deaths.Parent = leaderstats
 
-    local wins = Instance.new("IntValue")
-    wins.Name = "Wins"
-    wins.Value = 0
-    wins.Parent = leaderstats
-
-    -- Health setup
     local function onCharacterAdded(character)
         local humanoid = character:WaitForChild("Humanoid")
         humanoid.MaxHealth = 100
@@ -71,7 +73,6 @@ local function onPlayerAdded(player)
     end
 
     player.CharacterAdded:Connect(onCharacterAdded)
-
     if player.Character then
         onCharacterAdded(player.Character)
     end
@@ -79,10 +80,11 @@ end
 
 Players.PlayerAdded:Connect(onPlayerAdded)
 
--- Round System
 local roundActive = false
-local roundTime = 180 -- 3 minutes
-local scoreLimit = 20 -- first to 20 kills wins
+local roundTime = 180
+local scoreLimit = 20
+local kosovaWins = 0
+local rivalWins = 0
 
 local function getTeamKills(team)
     local total = 0
@@ -103,39 +105,65 @@ local function resetScores()
     end
 end
 
-local function announceWinner(winningTeam)
+local function fireAll(action, data)
     for _, player in pairs(Players:GetPlayers()) do
-        -- Could fire a RemoteEvent to show UI
+        gameEvent:FireClient(player, action, data)
     end
 end
 
--- Main round loop
-spawn(function()
+local function announceWinner(winningTeamName)
+    fireAll("RoundEnd", winningTeamName)
+    if winningTeamName == "Kosova" then
+        kosovaWins = kosovaWins + 1
+    elseif winningTeamName == "Rival" then
+        rivalWins = rivalWins + 1
+    end
+end
+
+task.spawn(function()
     while true do
-        wait(5) -- Wait for players
+        task.wait(2)
         if #Players:GetPlayers() >= 2 then
             resetScores()
-            roundActive = true
 
-            -- Round timer
+            fireAll("Intermission", 5)
+            task.wait(5)
+
+            roundActive = true
+            fireAll("RoundStart")
+
             for i = roundTime, 0, -1 do
                 if not roundActive then break end
-                wait(1)
+                fireAll("Timer", i)
+                task.wait(1)
 
-                -- Check score limit
                 if getTeamKills(teamKosova) >= scoreLimit then
-                    announceWinner(teamKosova)
+                    announceWinner("Kosova")
                     roundActive = false
                     break
                 elseif getTeamKills(teamRival) >= scoreLimit then
-                    announceWinner(teamRival)
+                    announceWinner("Rival")
                     roundActive = false
                     break
                 end
             end
 
-            roundActive = false
-            wait(10) -- Wait between rounds
+            if roundActive then
+                if getTeamKills(teamKosova) > getTeamKills(teamRival) then
+                    announceWinner("Kosova")
+                elseif getTeamKills(teamRival) > getTeamKills(teamKosova) then
+                    announceWinner("Rival")
+                else
+                    announceWinner("DRAW")
+                end
+                roundActive = false
+            end
+
+            fireAll("Intermission", 10)
+            task.wait(10)
+        else
+            fireAll("Intermission", 5)
+            task.wait(5)
         end
     end
 end)

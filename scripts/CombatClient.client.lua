@@ -1,152 +1,322 @@
--- Kosova PvP - Client Combat & Crosshair
+-- Kosova PvP - Weapon Animations + Combat Client
 -- Place in StarterPlayerScripts
+-- Handles: animations, combat input, crosshair, damage flash
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
+local StarterGui = game:GetService("StarterGui")
 
 local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local camera = workspace.CurrentCamera
+
 local combatEvent = ReplicatedStorage:WaitForChild("CombatEvent")
 
--- Wait for player to load
-player.CharacterAdded:Wait()
-wait(1)
+local animIds = {
+    SwordSlash = "rbxassetid://129967390",
+    SwordLunge = "rbxassetid://129967478",
+    KnifeStab = "rbxassetid://129967390",
+    KnifeSlash = "rbxassetid://129967478",
+    GunFire = "rbxassetid://129967390"
+}
 
--- Create crosshair
+local loadedAnims = {}
+local debounce = false
+local lastAttack = 0
+local currentWeapon = nil
+local ammo = 30
+local maxAmmo = 30
+local reloading = false
+
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "KosovaPvP_Crosshair"
+screenGui.Name = "CombatUI"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = player.PlayerGui
 
--- Crosshair center dot
-local crosshairDot = Instance.new("Frame")
-crosshairDot.Name = "CrosshairDot"
-crosshairDot.Size = UDim2.new(0, 4, 0, 4)
-crosshairDot.Position = UDim2.new(0.5, -2, 0.5, -2)
-crosshairDot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-crosshairDot.BorderSizePixel = 0
-crosshairDot.Parent = screenGui
+local crosshairFrame = Instance.new("Frame")
+crosshairFrame.Name = "Crosshair"
+crosshairFrame.Size = UDim2.new(0, 40, 0, 40)
+crosshairFrame.Position = UDim2.new(0.5, -20, 0.5, -20)
+crosshairFrame.BackgroundTransparency = 1
+crosshairFrame.Parent = screenGui
 
-local dotCorner = Instance.new("UICorner")
-dotCorner.CornerRadius = UDim.new(1, 0)
-dotCorner.Parent = crosshairDot
+local dot = Instance.new("Frame")
+dot.Name = "Dot"
+dot.Size = UDim2.new(0, 4, 0, 4)
+dot.Position = UDim2.new(0.5, -2, 0.5, -2)
+dot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+dot.BorderSizePixel = 0
+dot.Parent = crosshairFrame
 
--- Crosshair lines
-local function createCrosshairLine(name, position, size)
-    local line = Instance.new("Frame")
-    line.Name = name
-    line.Size = size
-    line.Position = position
-    line.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    line.BorderSizePixel = 0
-    line.Parent = screenGui
-    return line
-end
+local lineTop = Instance.new("Frame")
+lineTop.Name = "LineTop"
+lineTop.Size = UDim2.new(0, 2, 0, 8)
+lineTop.Position = UDim2.new(0.5, -1, 0, 0)
+lineTop.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+lineTop.BorderSizePixel = 0
+lineTop.Parent = crosshairFrame
 
--- Top line
-createCrosshairLine("TopLine", UDim2.new(0.5, -1, 0.5, -15), UDim2.new(0, 2, 0, 8))
--- Bottom line
-createCrosshairLine("BottomLine", UDim2.new(0.5, -1, 0.5, 7), UDim2.new(0, 2, 0, 8))
--- Left line
-createCrosshairLine("LeftLine", UDim2.new(0.5, -15, 0.5, -1), UDim2.new(0, 8, 0, 2))
--- Right line
-createCrosshairLine("RightLine", UDim2.new(0.5, 7, 0.5, -1), UDim2.new(0, 8, 0, 2))
+local lineBottom = Instance.new("Frame")
+lineBottom.Name = "LineBottom"
+lineBottom.Size = UDim2.new(0, 2, 0, 8)
+lineBottom.Position = UDim2.new(0.5, -1, 1, -8)
+lineBottom.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+lineBottom.BorderSizePixel = 0
+lineBottom.Parent = crosshairFrame
 
--- Combat system
-local canAttack = true
-local cooldown = 0.8
+local lineLeft = Instance.new("Frame")
+lineLeft.Name = "LineLeft"
+lineLeft.Size = UDim2.new(0, 8, 0, 2)
+lineLeft.Position = UDim2.new(0, 0, 0.5, -1)
+lineLeft.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+lineLeft.BorderSizePixel = 0
+lineLeft.Parent = crosshairFrame
 
--- Attack function
-local function attack()
-    if not canAttack then return end
-    if not player.Character then return end
+local lineRight = Instance.new("Frame")
+lineRight.Name = "LineRight"
+lineRight.Size = UDim2.new(0, 8, 0, 2)
+lineRight.Position = UDim2.new(1, -8, 0.5, -1)
+lineRight.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+lineRight.BorderSizePixel = 0
+lineRight.Parent = crosshairFrame
 
-    local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-    if not humanoidRootPart then return end
-
-    -- Get mouse target
-    local mouse = player:GetMouse()
-    local target = mouse.Target
-
-    if target then
-        -- Find the character model
-        local targetCharacter = target.Parent
-        if targetCharacter and targetCharacter:FindFirstChild("Humanoid") then
-            combatEvent:FireServer("Attack", targetCharacter)
-        end
-    end
-
-    -- Cooldown
-    canAttack = false
-    wait(cooldown)
-    canAttack = true
-end
-
--- Input handling
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-
-    -- Left click to attack
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        attack()
-    end
-end)
-
--- Weapon equip detection
-local function onCharacterAdded(character)
-    local humanoid = character:WaitForChild("Humanoid")
-
-    humanoid.Equipped:Connect(function(tool)
-        if tool then
-            -- Update cooldown based on weapon
-            if tool.Name == "Sword" then
-                cooldown = 0.8
-            elseif tool.Name == "Knife" then
-                cooldown = 0.6
-            elseif tool.Name == "AK47" then
-                cooldown = 0.15
-            end
-
-            -- Show crosshair for ranged weapons
-            if tool.Name == "AK47" then
-                crosshairDot.Visible = true
-            end
-        end
-    end)
-
-    humanoid.Unequipped:Connect(function()
-        crosshairDot.Visible = true
-    end)
-end
-
-player.CharacterAdded:Connect(onCharacterAdded)
-if player.Character then
-    onCharacterAdded(player.Character)
-end
-
--- Damage flash effect
 local damageFlash = Instance.new("Frame")
 damageFlash.Name = "DamageFlash"
 damageFlash.Size = UDim2.new(1, 0, 1, 0)
 damageFlash.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
 damageFlash.BackgroundTransparency = 1
 damageFlash.BorderSizePixel = 0
+damageFlash.ZIndex = 10
 damageFlash.Parent = screenGui
 
-local function showDamageFlash()
-    damageFlash.BackgroundTransparency = 0.5
-    for i = 0.5, 1, 0.05 do
-        damageFlash.BackgroundTransparency = i
-        wait(0.02)
+local ammoLabel = Instance.new("TextLabel")
+ammoLabel.Name = "AmmoLabel"
+ammoLabel.Size = UDim2.new(0, 120, 0, 40)
+ammoLabel.Position = UDim2.new(1, -140, 1, -60)
+ammoLabel.BackgroundTransparency = 0.5
+ammoLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+ammoLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+ammoLabel.TextScaled = true
+ammoLabel.Font = Enum.Font.GothamBold
+ammoLabel.Text = "30 / 30"
+ammoLabel.Visible = false
+ammoLabel.Parent = screenGui
+
+local reloadLabel = Instance.new("TextLabel")
+reloadLabel.Name = "ReloadLabel"
+reloadLabel.Size = UDim2.new(0, 200, 0, 30)
+reloadLabel.Position = UDim2.new(0.5, -100, 0.6, 0)
+reloadLabel.BackgroundTransparency = 1
+reloadLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+reloadLabel.TextScaled = true
+reloadLabel.Font = Enum.Font.GothamBold
+reloadLabel.Text = "RELOADING..."
+reloadLabel.Visible = false
+reloadLabel.Parent = screenGui
+
+local function ensureHumanoid()
+    if not character or not character.Parent then
+        character = player.Character or player.CharacterAdded:Wait()
+        humanoid = character:WaitForChild("Humanoid")
+        loadedAnims = {}
+    end
+    return humanoid
+end
+
+local function getTrack(name)
+    if loadedAnims[name] then
+        return loadedAnims[name]
+    end
+    local h = ensureHumanoid()
+    if not h then return nil end
+    local anim = Instance.new("Animation")
+    anim.AnimationId = animIds[name]
+    local track = h:LoadAnimation(anim)
+    track.Priority = Enum.AnimationPriority.Action
+    loadedAnims[name] = track
+    return track
+end
+
+local function playSound(tool, soundName)
+    if not tool then return end
+    local handle = tool:FindFirstChild("Handle")
+    if handle then
+        local sound = handle:FindFirstChild(soundName)
+        if sound then
+            sound:Play()
+        end
     end
 end
 
--- Listen for damage
-local healthEvent = ReplicatedStorage:WaitForChild("DamageEvent", 5)
-if healthEvent then
-    healthEvent.OnClientEvent:Connect(function(damage)
-        showDamageFlash()
-    end)
+local function updateAmmoDisplay()
+    if currentWeapon and currentWeapon.Name == "AK47" then
+        ammoLabel.Visible = true
+        ammoLabel.Text = ammo .. " / " .. maxAmmo
+    else
+        ammoLabel.Visible = false
+    end
 end
 
-print("Kosova PvP - Combat System Loaded!")
+local function showDamageFlash()
+    damageFlash.BackgroundTransparency = 0.5
+    local tween = game:GetService("TweenService"):Create(damageFlash, TweenInfo.new(0.5), {BackgroundTransparency = 1})
+    tween:Play()
+end
+
+local function reload()
+    if reloading or ammo == maxAmmo then return end
+    if not currentWeapon or currentWeapon.Name ~= "AK47" then return end
+    reloading = true
+    reloadLabel.Visible = true
+    task.wait(2)
+    ammo = maxAmmo
+    reloading = false
+    reloadLabel.Visible = false
+    updateAmmoDisplay()
+end
+
+local function findTarget()
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return nil end
+
+    local tool = character:FindFirstChildOfClass("Tool")
+    if not tool then return nil end
+
+    local range = 8
+    if tool.Name == "AK47" then
+        range = 100
+    end
+
+    for _, otherPlayer in pairs(Players:GetPlayers()) do
+        if otherPlayer ~= player then
+            local otherChar = otherPlayer.Character
+            if otherChar then
+                local otherRoot = otherChar:FindFirstChild("HumanoidRootPart")
+                local otherHumanoid = otherChar:FindFirstChild("Humanoid")
+                if otherRoot and otherHumanoid and otherHumanoid.Health > 0 then
+                    local distance = (rootPart.Position - otherRoot.Position).Magnitude
+                    if distance <= range then
+                        if player.Team and otherPlayer.Team and player.Team ~= otherPlayer.Team then
+                            return otherChar
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+local function onToolActivated()
+    if debounce then return end
+
+    local tool = character:FindFirstChildOfClass("Tool")
+    if not tool then return end
+
+    local now = tick()
+    local cooldown = 0.8
+    if tool.Name == "AK47" then
+        cooldown = 0.15
+        if ammo <= 0 then
+            reload()
+            return
+        end
+        if reloading then return end
+        ammo = ammo - 1
+        updateAmmoDisplay()
+    elseif tool.Name == "Knife" then
+        cooldown = 0.6
+    end
+
+    if now - lastAttack < cooldown then return end
+    debounce = true
+    lastAttack = now
+
+    if tool.Name == "Sword" then
+        local track = getTrack("SwordSlash")
+        if track then track:Play(0.1, 1, 1) end
+        playSound(tool, "Slash")
+    elseif tool.Name == "Knife" then
+        local track = getTrack("KnifeStab")
+        if track then track:Play(0.1, 1, 1) end
+        playSound(tool, "Slash")
+    elseif tool.Name == "AK47" then
+        local track = getTrack("GunFire")
+        if track then track:Play(0.1, 1, 1) end
+        playSound(tool, "Fire")
+    end
+
+    local target = findTarget()
+    if target then
+        combatEvent:FireServer("Attack", target)
+    end
+
+    task.wait(cooldown)
+    debounce = false
+end
+
+local function onToolEquipped(tool)
+    currentWeapon = tool
+    crosshairFrame.Visible = true
+    ammo = maxAmmo
+    reloading = false
+    reloadLabel.Visible = false
+    updateAmmoDisplay()
+end
+
+local function onToolUnequipped()
+    currentWeapon = nil
+    crosshairFrame.Visible = false
+    ammoLabel.Visible = false
+    reloading = false
+    reloadLabel.Visible = false
+end
+
+local function onCharacterAdded(newCharacter)
+    character = newCharacter
+    humanoid = character:WaitForChild("Humanoid")
+    loadedAnims = {}
+    currentWeapon = nil
+    ammo = maxAmmo
+    reloading = false
+end
+
+player.CharacterAdded:Connect(onCharacterAdded)
+
+local function connectTool(tool)
+    tool.Activated:Connect(onToolActivated)
+    tool.Equipped:Connect(function() onToolEquipped(tool) end)
+    tool.Unequipped:Connect(onToolUnequipped)
+end
+
+for _, child in pairs(character:GetChildren()) do
+    if child:IsA("Tool") then
+        connectTool(child)
+    end
+end
+
+character.ChildAdded:Connect(function(child)
+    if child:IsA("Tool") then
+        connectTool(child)
+    end
+end)
+
+player.Backpack.ChildAdded:Connect(function(child)
+    if child:IsA("Tool") then
+        child.Equipped:Connect(function()
+            connectTool(child)
+        end)
+    end
+end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.R then
+        reload()
+    end
+end)
+
+print("Kosova PvP - Combat Client Loaded!")
